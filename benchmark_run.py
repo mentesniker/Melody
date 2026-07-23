@@ -33,10 +33,11 @@ DEFAULTS = dict(
     hidden_size=128,
     gamma=0.95,
     gae_lambda=0.95,
-    beta=3,
+    beta=1.5,
+    melody_beta=1.5,
     aa_discount=0.9,
-    lr_actor=5e-4,
-    lr_critic=7e-4,
+    lr_actor=0.05,
+    lr_critic=0.07,
     clip_eps=0.1,
     entropy_beta=0.02,
     max_grad_norm=1.0,
@@ -46,11 +47,11 @@ DEFAULTS = dict(
     aggregated_loss=True,
     curriculum=True,
     replay_buffer_size=80,
-    replay_ratio=0.4,
-    replay_samples=6,
+    replay_ratio=0.5,
+    replay_samples=3,
     n_candidates=10,
-    lambda_lyap=0.5,
-    lyap_c=0.1,
+    lambda_lyap=1000,
+    lyap_c=0.001,
     alpha_queue=20.0,
     alpha_penalty=30.0,
     alpha_gini=40000.0,
@@ -171,7 +172,7 @@ def train_and_save(config, save_dir):
             "n_agents", "max_items", "min_items", "max_proposal",
             "maximum_number_of_different_classes", "overflow_percentage",
             "hidden_size", "trajectory_length", "batch_size",
-            "gamma", "gae_lambda", "beta", "aa_discount",
+            "gamma", "gae_lambda", "beta", "melody_beta", "aa_discount",
             "lr_actor", "lr_critic", "clip_eps", "entropy_beta", "max_grad_norm",
             "shared_critic", "self_play", "aggregated_loss",
             "curriculum", "replay_buffer_size", "replay_ratio", "replay_samples",
@@ -687,13 +688,14 @@ def main():
     parser.add_argument("--melody-iterations", type=int, default=DEFAULTS["melody_iterations"])
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--episode-length", type=int, default=DEFAULTS["eval_episode_length"])
+    parser.add_argument("--melody-beta", type=float, default=None)
     parser.add_argument("--lambda-a-low", type=int, default=DEFAULTS["lambda_a_low"])
     parser.add_argument("--lambda-a-med", type=int, default=DEFAULTS["lambda_a_med"])
     parser.add_argument("--lambda-a-high", type=int, default=DEFAULTS["lambda_a_high"])
     args = parser.parse_args()
 
     if args.mode in ("train", "both"):
-        config = build_config(
+        overrides = dict(
             training_seed=args.training_seed,
             n_iterations=args.n_iterations,
             ppo_iterations=args.ppo_iterations,
@@ -702,6 +704,9 @@ def main():
             lambda_a_med=args.lambda_a_med,
             lambda_a_high=args.lambda_a_high,
         )
+        if args.melody_beta is not None:
+            overrides["melody_beta"] = args.melody_beta
+        config = build_config(**overrides)
         train_and_save(config, args.save_dir)
 
     if args.mode in ("benchmark", "both"):

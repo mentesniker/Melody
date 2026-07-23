@@ -93,6 +93,6 @@ class AdvantageCalculator:
             )
 
             aligned[t] = agent_adv[t] + alignment_term
-            cumulative_agent_adv = cumulative_agent_adv + agent_adv[t]
+            cumulative_agent_adv = self.aa_discount * cumulative_agent_adv + agent_adv[t]
 
         return aligned, all_agent_advantages
