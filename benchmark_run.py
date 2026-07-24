@@ -56,12 +56,12 @@ DEFAULTS = dict(
     alpha_queue=20.0,
     alpha_penalty=30.0,
     alpha_gini=40000.0,
-    n_iterations=1,
-    ppo_iterations=1,
-    melody_iterations=1,
-    log_interval=1,
-    eval_episode_length=1,
-    training_seed=None,
+    n_iterations=3,
+    ppo_iterations=3,
+    melody_iterations=3,
+    log_interval=3,
+    eval_episode_length=3,
+    training_seed=758,
     # --- MEC delay model ---
     user_delay_lambda=1,
     arrivals_poisson_lambda=2,
@@ -700,7 +700,6 @@ def main():
 
     if args.mode in ("train", "both"):
         overrides = dict(
-            training_seed=args.training_seed,
             n_iterations=args.n_iterations,
             ppo_iterations=args.ppo_iterations,
             melody_iterations=args.melody_iterations,
@@ -708,6 +707,8 @@ def main():
             lambda_a_med=args.lambda_a_med,
             lambda_a_high=args.lambda_a_high,
         )
+        if args.training_seed is not None:
+            overrides["training_seed"] = args.training_seed
         if args.melody_beta is not None:
             overrides["melody_beta"] = args.melody_beta
         config = build_config(**overrides)
