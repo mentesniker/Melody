@@ -8,6 +8,7 @@ Usage:
 
 import argparse
 import json
+import random
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -28,8 +29,8 @@ DEFAULTS = dict(
     max_items=20,
     min_items=1,
     max_proposal=5.0,
-    trajectory_length=50,
-    batch_size=4,
+    trajectory_length=2,
+    batch_size=1,
     hidden_size=128,
     gamma=0.95,
     gae_lambda=0.95,
@@ -55,12 +56,12 @@ DEFAULTS = dict(
     alpha_queue=20.0,
     alpha_penalty=30.0,
     alpha_gini=40000.0,
-    n_iterations=100,
-    ppo_iterations=100,
-    melody_iterations=100,
-    log_interval=200,
-    eval_episode_length=100,
-    training_seed=42,
+    n_iterations=1,
+    ppo_iterations=1,
+    melody_iterations=1,
+    log_interval=1,
+    eval_episode_length=1,
+    training_seed=None,
     # --- MEC delay model ---
     user_delay_lambda=1,
     arrivals_poisson_lambda=2,
@@ -73,7 +74,7 @@ DEFAULTS = dict(
     inter_orch_delays=[[0, 1, 2],
                        [1, 0, 1],
                        [2, 1, 0]],
-    power_multipliers=[8, 12, 16],
+    power_multipliers= [8, 12, 16],
 )
 
  
@@ -90,6 +91,9 @@ PER_AGENT_METRICS = [
 
 def build_config(**overrides):
     cfg = {**DEFAULTS, **overrides}
+    if cfg["training_seed"] is None:
+        cfg["training_seed"] = random.randint(0, 2**12 - 1)
+        print(f"No training seed provided — using random seed: {cfg['training_seed']}")
     cfg["obs_dim"] = (1 + 1 + cfg["n_agents"] + 3) * cfg["max_items"] + 1
     cfg["action_dim"] = cfg["max_items"]
     return cfg
@@ -678,7 +682,7 @@ def main():
     )
     parser.add_argument("--mode", choices=["train", "benchmark", "both"], default="both")
     parser.add_argument("--save-dir", default="checkpoints/default")
-    parser.add_argument("--training-seed", type=int, default=DEFAULTS["training_seed"])
+    parser.add_argument("--training-seed", type=int, default=None)
     parser.add_argument(
         "--benchmark-seeds", nargs="+", type=int,
         default=[42, 137, 256, 512, 999, 1234, 2048, 3141, 4096, 7777],

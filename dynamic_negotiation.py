@@ -130,20 +130,22 @@ class TrajectoryReplayBuffer:
             self.buffer[self._idx % self.capacity] = entry
         self._idx += 1
 
-    def sample(self, n=1):
+    def sample(self, n=1, rng=None):
         if len(self.buffer) == 0:
             return []
+        if rng is None:
+            rng = np.random.default_rng()
         by_scenario = defaultdict(list)
         for i, entry in enumerate(self.buffer):
             by_scenario[entry["_scenario"]].append(i)
         picked = set()
         for indices in by_scenario.values():
-            picked.add(indices[np.random.randint(len(indices))])
+            picked.add(indices[rng.integers(len(indices))])
         remaining = n - len(picked)
         if remaining > 0:
             pool = [i for i in range(len(self.buffer)) if i not in picked]
             if pool:
-                extras = np.random.choice(pool, size=min(remaining, len(pool)), replace=False)
+                extras = rng.choice(pool, size=min(remaining, len(pool)), replace=False)
                 picked.update(extras.tolist())
         return [self.buffer[i] for i in picked]
 
@@ -230,6 +232,8 @@ class DynamicPAATrainer:
         self.replay_samples = replay_samples
         self.replay_buffer = TrajectoryReplayBuffer(capacity=replay_buffer_size) if curriculum else None
         self._rng = np.random.default_rng()
+
+        self.replay_rng = np.random.default_rng()
 
         self.orchestrator = Orchestrator(batch_size, max_items, n_agents, min_value=min_value,
                                           orch_to_agent_delays=self.orch_to_agent_delays)
@@ -349,6 +353,11 @@ class DynamicPAATrainer:
             self.train_history[f"mean_r{i}"] = []
             self.train_history[f"critic_loss{i}"] = []
             self.train_history[f"actor_loss{i}"] = []
+
+    def seed(self, seed):
+        self._rng = np.random.default_rng(seed)
+        self.replay_rng = np.random.default_rng(seed)
+        self.env._rng = np.random.default_rng(seed)
 
     def train(self, n_iterations=1000, log_interval=10):
         prev_assigned = [0] * self.n_agents
@@ -481,7 +490,7 @@ class DynamicPAATrainer:
                 last_actor_losses = actor_losses
 
             if self.curriculum and len(self.replay_buffer) > 10 and self._rng.random() < self.replay_ratio:
-                replay_trajs = self.replay_buffer.sample(self.replay_samples)
+                replay_trajs = self.replay_buffer.sample(self.replay_samples, rng=self.replay_rng)
                 for replay_traj in replay_trajs:
                     self._replay_optimize(replay_traj)
 
@@ -674,7 +683,7 @@ class DynamicNegotiationVerifier:
         # --- Infrastructure ---
         device=None,             # "cpu" or "cuda". Auto-detected if None.
         plot_dir="plots_dynamic",  # Directory for saving training curves and benchmark plots.
-        training_seed=42,        # Random seed for training. Shared across all variants for fair comparison.
+        training_seed=None,      # Random seed for training. None = random. Shared across all variants for fair comparison.
         benchmark_seed=123,      # Random seed for benchmark evaluation. Ensures identical item sequences.
         # --- Melody-specific ---
         # Best-of-N trajectory selection: sample N candidates, keep the one with the best composite score.
@@ -702,6 +711,9 @@ class DynamicNegotiationVerifier:
             device = "cuda" if torch.cuda.is_available() else "cpu"
         self.device = device
         self.plot_dir = plot_dir
+        if training_seed is None:
+            training_seed = random.randint(0, 2**31 - 1)
+            print(f"No training seed provided — using random seed: {training_seed}")
         self.training_seed = training_seed
         self.benchmark_seed = benchmark_seed
         self.n_agents = n_agents
@@ -749,6 +761,7 @@ class DynamicNegotiationVerifier:
 
         self._item_classes = make_mec_item_classes(n_agents)
 
+        self._set_seed(training_seed)
         self.paa_trainer = DynamicPAATrainer(
             n_agents=n_agents,
             max_items=max_items,
@@ -788,12 +801,26 @@ class DynamicNegotiationVerifier:
             lambda_a_med=lambda_a_med,
             lambda_a_high=lambda_a_high,
         )
-
+        self.paa_trainer.seed(training_seed)
 
     def _set_seed(self, seed=42):
-        torch.manual_seed(seed)
-        np.random.seed(seed)
+        os.environ["PYTHONHASHSEED"] = str(seed)
         random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        self._seed_trainers(seed)
+
+    def _seed_trainers(self, seed):
+        if hasattr(self, 'paa_trainer'):
+            self.paa_trainer.seed(seed)
+        if hasattr(self, 'ppo_trainer'):
+            self.ppo_trainer.seed(seed)
+        if hasattr(self, 'melody_trainer'):
+            self.melody_trainer.seed(seed)
 
     def _free_memory(self):
         gc.collect()
@@ -837,6 +864,7 @@ class DynamicNegotiationVerifier:
             class_probabilities=self.class_probabilities,
             power_multipliers=self.power_multipliers,
         )
+        self.ppo_trainer.seed(self.training_seed)
         self.ppo_trainer.train(n_iterations=n_iterations, log_interval=log_interval)
         self._free_memory()
         print("PPO baseline training complete.")
@@ -888,6 +916,7 @@ class DynamicNegotiationVerifier:
             lambda_a_med=self.lambda_a_med,
             lambda_a_high=self.lambda_a_high,
         )
+        self.melody_trainer.seed(self.training_seed)
         self.melody_trainer.train(n_iterations=n_iterations, log_interval=log_interval)
         self._free_memory()
         print("Melody training complete.")

@@ -327,7 +327,7 @@ def fair_mec_select(all_bids, n_agents, max_items, max_proposal, batch_size=1, _
 # ---------------------------------------------------------------------------
 
 def run_fairmec_episode(agents, env, orchestrator, n_agents, max_proposal,
-                        episode_length, inter_orch_delays):
+                        episode_length, inter_orch_delays, seed=None):
     for agent in agents:
         agent.clear_won_items()
         agent.benchmark_mode = True
@@ -335,7 +335,7 @@ def run_fairmec_episode(agents, env, orchestrator, n_agents, max_proposal,
 
     obs_list = env.reset()
     B = env.batch_size
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
 
     cumulative_rewards = [0.0] * n_agents
     queue_length_sum = [0.0] * n_agents
@@ -539,6 +539,7 @@ def run_fairmec_benchmark(config, benchmark, n_episodes=5, episode_length=1000):
             ep_result = run_fairmec_episode(
                 agents, env, orchestrator, n_agents, max_proposal,
                 episode_length, inter_orch_delays,
+                seed=benchmark.seed * 10000 + sc_idx * 1000 + ep,
             )
 
             episode_data["rewards"].append(ep_result["rewards"])

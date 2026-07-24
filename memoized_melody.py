@@ -293,7 +293,7 @@ class MemoizedMelodyTrainer(DynamicPAATrainer):
                 last_actor_losses = actor_losses
 
             if self.curriculum and len(self.replay_buffer) > 10 and self._rng.random() < self.replay_ratio:
-                replay_trajs = self.replay_buffer.sample(self.replay_samples)
+                replay_trajs = self.replay_buffer.sample(self.replay_samples, rng=self.replay_rng)
                 for replay_traj in replay_trajs:
                     self._replay_optimize(replay_traj)
 
